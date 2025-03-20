@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import { videos } from "@/db/schema";
+import { mux } from "@/lib/mux";
 import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
 
 export const videosRouter = createTRPCRouter({
@@ -7,16 +8,24 @@ export const videosRouter = createTRPCRouter({
 		try {
 			const { id: userId } = ctx.user;
 
+			const upload = await mux.video.uploads.create({
+				new_asset_settings: {
+					passthrough: userId,
+					playback_policy: ["public"],
+				},
+				cors_origin: "*", //TODO: in production set your URL
+			});
+
 			if (!userId) {
 				throw new Error("User ID is missing.");
 			}
 
 			const [video] = await db
 				.insert(videos)
-				.values({ userId, title: "Untitled" })
+				.values({ userId, title: "Untitled", muxStatus: "waiting", muxUploadId: upload.id })
 				.returning();
 
-			return { video };
+			return { video: video, url: upload.url };
 		} catch (error) {
 			console.error("Error creating video:", error);
 			throw new Error("Failed to create video.");
